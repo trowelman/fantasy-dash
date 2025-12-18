@@ -4,53 +4,17 @@
 <meta charset="utf-8">
 <title>Fantasy Dash</title>
 <style>
-html,body{
-  margin:0;
-  background:#0b1020;
-  overflow:hidden;
-  font-family:system-ui,Arial
-}
-#wrap{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  height:100vh;
-  flex-direction:column;
-  gap:10px
-}
-canvas{
-  background:#101a3a;
-  border-radius:10px
-}
-.row{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  justify-content:center
-}
+html,body{margin:0;background:#0b1020;overflow:hidden;font-family:system-ui,Arial}
+#wrap{display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;gap:10px}
+canvas{background:#101a3a;border-radius:10px}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 button{
-  padding:10px 16px;
-  font-size:14px;
-  cursor:pointer;
-  border:1px solid rgba(255,255,255,.15);
-  background:rgba(255,255,255,.08);
-  color:#fff;
-  border-radius:10px
+  padding:10px 16px;font-size:14px;cursor:pointer;border-radius:10px;
+  border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff
 }
-button.primary{
-  background:#fff;
-  color:#0b1020;
-  border:none
-}
-button.sel{
-  outline:2px solid rgba(255,255,255,.6)
-}
-.small{
-  font-size:13px;
-  color:#cfd6ff;
-  opacity:.9;
-  text-align:center
-}
+button.primary{background:#fff;color:#0b1020;border:none}
+button.sel{outline:2px solid rgba(255,255,255,.6)}
+.small{font-size:13px;color:#cfd6ff;opacity:.9;text-align:center}
 </style>
 </head>
 <body>
@@ -61,6 +25,7 @@ button.sel{
   <div class="row">
     <button id="fsBtn">Fullscreen</button>
     <button id="playBtn" class="primary">Play</button>
+    <button id="muteBtn">Sound: ON</button>
   </div>
 
   <div class="row">
@@ -68,55 +33,93 @@ button.sel{
     <button id="hardBtn">Hard</button>
   </div>
 
-  <div id="hint" class="small">
-    Choose difficulty, then press Play
-  </div>
+  <div id="hint" class="small">Choose difficulty, then press Play (or Space).</div>
 </div>
 
 <script>
 /* =======================
-   AUDIO (music + sfx)
+   WEB AUDIO (no MP3 files)
 ======================= */
-const music = new Audio(
-  "https://cdn.pixabay.com/download/audio/2022/10/03/audio_8b2d64d4d3.mp3"
-);
-music.loop = true;
-music.volume = 0.35;
+let audioCtx = null;
+let muted = false;
+let musicTimer = null;
 
-const jumpSound = new Audio(
-  "https://cdn.pixabay.com/download/audio/2022/03/15/audio_115b9b4e64.mp3"
-);
-jumpSound.volume = 0.6;
+function ensureAudio(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // Some browsers start suspended until user gesture; Play button is a gesture.
+  if (audioCtx.state === "suspended") audioCtx.resume();
+}
 
-const gameOverSound = new Audio(
-  "https://cdn.pixabay.com/download/audio/2022/03/15/audio_8f03a7ad63.mp3"
-);
-gameOverSound.volume = 0.6;
+function playTone(freq, dur=0.08, type="sine", vol=0.08){
+  if (!audioCtx || muted) return;
+  const t0 = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t0);
+
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t0);
+  o.stop(t0 + dur + 0.02);
+}
+
+function jumpSfx(){
+  playTone(660, 0.07, "square", 0.06);
+  playTone(990, 0.05, "square", 0.04);
+}
+
+function gameOverSfx(){
+  playTone(330, 0.12, "sawtooth", 0.08);
+  playTone(220, 0.18, "sawtooth", 0.08);
+}
+
+function startMusic(){
+  if (!audioCtx) return;
+  stopMusic();
+  // Simple looping “fantasy-ish” arpeggio
+  const notes = [523.25, 659.25, 783.99, 659.25, 587.33, 739.99, 880.00, 739.99]; // C5 E5 G5...
+  let i = 0;
+  musicTimer = setInterval(() => {
+    if (muted) return;
+    playTone(notes[i % notes.length], 0.10, "triangle", 0.03);
+    i++;
+  }, 140);
+}
+
+function stopMusic(){
+  if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+}
 
 /* =======================
    CANVAS + UI
 ======================= */
 const c = document.getElementById("c");
 const x = c.getContext("2d");
-
 const fsBtn   = document.getElementById("fsBtn");
 const playBtn = document.getElementById("playBtn");
+const muteBtn = document.getElementById("muteBtn");
 const easyBtn = document.getElementById("easyBtn");
 const hardBtn = document.getElementById("hardBtn");
 const hint    = document.getElementById("hint");
 
-/* Fullscreen */
-fsBtn.onclick = () => {
-  if (document.documentElement.requestFullscreen)
-    document.documentElement.requestFullscreen();
+fsBtn.onclick = () => document.documentElement.requestFullscreen?.();
+
+muteBtn.onclick = () => {
+  muted = !muted;
+  muteBtn.textContent = muted ? "Sound: OFF" : "Sound: ON";
+  if (muted) stopMusic();
+  else if (state === "playing") startMusic();
 };
 
 /* =======================
-   GAME STATE
+   GAME STATE + DIFFICULTY
 ======================= */
 let state = "menu"; // menu | playing | gameover
 
-/* Difficulty */
 let difficulty = "easy";
 let speed = 6;
 let spawnChance = 0.018;
@@ -124,117 +127,92 @@ let spawnChance = 0.018;
 function setDifficulty(mode){
   difficulty = mode;
   if(mode==="easy"){
-    speed = 6;
-    spawnChance = 0.018;
-    easyBtn.classList.add("sel");
-    hardBtn.classList.remove("sel");
+    speed = 6; spawnChance = 0.018;
+    easyBtn.classList.add("sel"); hardBtn.classList.remove("sel");
   } else {
-    speed = 9;
-    spawnChance = 0.03;
-    hardBtn.classList.add("sel");
-    easyBtn.classList.remove("sel");
+    speed = 9; spawnChance = 0.030;
+    hardBtn.classList.add("sel"); easyBtn.classList.remove("sel");
   }
 }
 setDifficulty("easy");
-
 easyBtn.onclick = ()=>setDifficulty("easy");
 hardBtn.onclick = ()=>setDifficulty("hard");
 
-/* Game variables */
+/* =======================
+   GAME VARIABLES
+======================= */
 let y, v, obs, score, best;
 best = Number(localStorage.getItem("fd_best")||0);
 
 function resetRun(){
-  y = 300;
-  v = 0;
-  obs = [];
-  score = 0;
+  y = 300; v = 0; obs = []; score = 0;
 }
 
 function startGame(){
+  ensureAudio();
   resetRun();
   state = "playing";
-  music.currentTime = 0;
-  music.play();
+  startMusic();
 }
 
-playBtn.onclick = ()=>{
-  if(state!=="playing") startGame();
-};
+playBtn.onclick = ()=> { if(state!=="playing") startGame(); };
 
-/* Controls */
 document.addEventListener("keydown", e=>{
   if(e.code==="Space"){
-    if(state!=="playing"){
-      startGame();
-    } else {
-      v = -18;
-      jumpSound.currentTime = 0;
-      jumpSound.play();
-    }
+    if(state!=="playing") startGame();
+    else { v = -18; jumpSfx(); }
   }
   if(e.code==="KeyR"){
     state="menu";
-    music.pause();
+    stopMusic();
   }
 });
 
 c.addEventListener("pointerdown", ()=>{
-  if(state==="playing"){
-    v = -18;
-    jumpSound.currentTime = 0;
-    jumpSound.play();
-  }
+  if(state==="playing"){ v=-18; jumpSfx(); }
 });
 
-/* Helpers */
-function centerText(t,y,s=28,a=1){
-  x.save();
-  x.globalAlpha=a;
-  x.fillStyle="#fff";
-  x.font=s+"px system-ui";
-  const w=x.measureText(t).width;
-  x.fillText(t,(c.width-w)/2,y);
+/* =======================
+   DRAW HELPERS
+======================= */
+function centerText(t,yPos,s=28,a=1){
+  x.save(); x.globalAlpha=a; x.fillStyle="#fff"; x.font=s+"px system-ui";
+  const w=x.measureText(t).width; x.fillText(t,(c.width-w)/2,yPos);
   x.restore();
 }
 
 /* =======================
-   GAME LOOP
+   LOOP
 ======================= */
 function loop(){
   x.clearRect(0,0,c.width,c.height);
-  x.fillStyle="#101a3a";
-  x.fillRect(0,0,c.width,c.height);
+  x.fillStyle="#101a3a"; x.fillRect(0,0,c.width,c.height);
 
-  x.fillStyle="#fff";
-  x.font="16px system-ui";
+  x.fillStyle="#fff"; x.font="16px system-ui";
   x.fillText("Best: "+best,10,20);
   x.fillText("Difficulty: "+difficulty.toUpperCase(),10,40);
 
   if(state==="menu"){
     centerText("Fantasy Dash",170,44);
-    centerText("Press Play or SPACE",220,18,.9);
-    requestAnimationFrame(loop);
-    return;
+    centerText("Click Play or press SPACE",220,18,.9);
+    centerText("Press R to come back here",250,14,.8);
+    requestAnimationFrame(loop); return;
   }
 
-  v+=1;
-  y+=v;
-  if(y>300){y=300;v=0}
-
-  x.fillStyle="#4af";
-  x.fillRect(100,y,40,40);
+  v+=1; y+=v; if(y>300){y=300;v=0}
+  x.fillStyle="#4af"; x.fillRect(100,y,40,40);
 
   if(Math.random()<spawnChance) obs.push({x:c.width});
 
   for(const o of obs){
     o.x-=speed;
-    x.fillStyle="#f55";
-    x.fillRect(o.x,300,30,40);
-    if(o.x<140&&o.x>60&&y>260&&state==="playing"){
+    x.fillStyle="#f55"; x.fillRect(o.x,300,30,40);
+    const hit = (o.x<140 && o.x>60 && y>260);
+    if(hit && state==="playing"){
       state="gameover";
-      music.pause();
-      gameOverSound.play();
+      stopMusic();
+      ensureAudio();
+      gameOverSfx();
     }
   }
 
@@ -242,12 +220,8 @@ function loop(){
   x.fillText("Score: "+score,10,60);
 
   if(state==="gameover"){
-    if(score>best){
-      best=score;
-      localStorage.setItem("fd_best",best);
-    }
-    x.fillStyle="rgba(0,0,0,.4)";
-    x.fillRect(0,0,c.width,c.height);
+    if(score>best){ best=score; localStorage.setItem("fd_best", String(best)); }
+    x.fillStyle="rgba(0,0,0,.4)"; x.fillRect(0,0,c.width,c.height);
     centerText("Game Over",200,40);
     centerText("Press SPACE to restart",245,18,.9);
     centerText("Press R for menu",270,16,.8);
@@ -259,5 +233,6 @@ loop();
 </script>
 </body>
 </html>
+
 
 
