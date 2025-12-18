@@ -6,21 +6,51 @@
 <style>
 html,body{margin:0;background:#0b1020;overflow:hidden;font-family:system-ui,Arial}
 #wrap{display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;gap:10px}
-canvas{background:#101a3a}
-button{padding:10px 16px;font-size:14px;cursor:pointer}
+canvas{background:#101a3a;border-radius:10px}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+button{
+  padding:10px 16px;
+  font-size:14px;
+  cursor:pointer;
+  border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.08);
+  color:#fff;
+  border-radius:10px;
+}
+button:hover{background:rgba(255,255,255,.14)}
+button.primary{background:#ffffff;color:#0b1020;border:none}
+button.primary:hover{opacity:.9}
+button.sel{outline:2px solid rgba(255,255,255,.55)}
+.small{opacity:.85;font-size:13px;color:#cfd6ff;text-align:center}
 </style>
 </head>
 <body>
 
 <div id="wrap">
   <canvas id="c" width="900" height="420"></canvas>
-  <button id="fsBtn">Fullscreen</button>
+
+  <div class="row">
+    <button id="fsBtn">Fullscreen</button>
+    <button id="playBtn" class="primary">Play</button>
+  </div>
+
+  <div class="row">
+    <button id="easyBtn" class="sel">Easy</button>
+    <button id="hardBtn">Hard</button>
+  </div>
+
+  <div id="hint" class="small">Choose difficulty, then press Play (or press Space).</div>
 </div>
 
 <script>
 const c = document.getElementById("c");
 const x = c.getContext("2d");
-const fsBtn = document.getElementById("fsBtn");
+
+const fsBtn   = document.getElementById("fsBtn");
+const playBtn = document.getElementById("playBtn");
+const easyBtn = document.getElementById("easyBtn");
+const hardBtn = document.getElementById("hardBtn");
+const hint    = document.getElementById("hint");
 
 // ---------- Fullscreen ----------
 fsBtn.onclick = () => {
@@ -31,27 +61,56 @@ fsBtn.onclick = () => {
 // ---------- Game State ----------
 let state = "menu"; // "menu" | "playing" | "gameover"
 
+// ---------- Difficulty ----------
+let difficulty = "easy";
+let speed = 6;
+let spawnChance = 0.018;
+
+function setDifficulty(mode){
+  difficulty = mode;
+
+  if (mode === "easy"){
+    speed = 6;
+    spawnChance = 0.018;
+    easyBtn.classList.add("sel");
+    hardBtn.classList.remove("sel");
+    hint.textContent = "Easy: slower + fewer blocks. Press Play (or Space).";
+  } else {
+    speed = 9;
+    spawnChance = 0.030;
+    hardBtn.classList.add("sel");
+    easyBtn.classList.remove("sel");
+    hint.textContent = "Hard: faster + more blocks. Press Play (or Space).";
+  }
+}
+
+easyBtn.onclick = () => setDifficulty("easy");
+hardBtn.onclick = () => setDifficulty("hard");
+
+// default
+setDifficulty("easy");
+
 // ---------- Game Variables ----------
 let y, v, obs, score, best;
 best = Number(localStorage.getItem("fd_best") || 0);
 
 function resetRun(){
-  y = 300;          // player Y
-  v = 0;            // velocity
-  obs = [];         // obstacles
+  y = 300;
+  v = 0;
+  obs = [];
   score = 0;
 }
 
-resetRun();
-
-// ---------- Controls ----------
 function startGame(){
-  if (state === "menu" || state === "gameover") {
-    resetRun();
-    state = "playing";
-  }
+  resetRun();
+  state = "playing";
 }
 
+playBtn.onclick = () => {
+  if (state !== "playing") startGame();
+};
+
+// ---------- Controls ----------
 document.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     if (state !== "playing") startGame();
@@ -63,8 +122,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 c.addEventListener("pointerdown", () => {
-  if (state !== "playing") startGame();
-  else v = -18;
+  if (state === "playing") v = -18;
 });
 
 // ---------- Helpers ----------
@@ -84,18 +142,18 @@ function loop(){
   x.fillStyle = "#101a3a";
   x.fillRect(0,0,c.width,c.height);
 
-  // UI (top left)
+  // top-left UI
   x.fillStyle="#fff";
   x.font="16px system-ui, Arial";
   x.fillText("Best: " + best, 10, 20);
+  x.fillText("Difficulty: " + difficulty.toUpperCase(), 10, 40);
 
   if (state === "menu") {
-    // Start Screen
     drawCenteredText("Fantasy Dash", 170, 44);
-    drawCenteredText("Press SPACE or click to start", 220, 18, 0.9);
-    drawCenteredText("Press R to return here anytime", 250, 14, 0.8);
+    drawCenteredText("Click Play or press SPACE", 220, 18, 0.9);
+    drawCenteredText("Press R anytime for Start Screen", 250, 14, 0.8);
 
-    // little preview cube
+    // preview cube
     x.fillStyle="#4af";
     x.fillRect(120, 300, 40, 40);
 
@@ -113,9 +171,9 @@ function loop(){
   x.fillRect(100, y, 40, 40);
 
   // obstacles spawn + move
-  if (Math.random() < 0.02) obs.push({x:c.width});
+  if (Math.random() < spawnChance) obs.push({x:c.width});
   for (const o of obs) {
-    o.x -= 6;
+    o.x -= speed;
     x.fillStyle="#f55";
     x.fillRect(o.x, 300, 30, 40);
 
@@ -127,7 +185,7 @@ function loop(){
   // score
   if (state === "playing") score++;
   x.fillStyle="#fff";
-  x.fillText("Score: " + score, 10, 40);
+  x.fillText("Score: " + score, 10, 60);
 
   if (state === "gameover") {
     // save best
