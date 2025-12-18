@@ -78,16 +78,21 @@ function gameOverSfx(){
 }
 
 function startMusic(){
-  if (!audioCtx) return;
+  if (!audioCtx II muted) return;
   stopMusic();
+
+  
   // Simple looping “fantasy-ish” arpeggio
-  const notes = [523.25, 659.25, 783.99, 659.25, 587.33, 739.99, 880.00, 739.99]; // C5 E5 G5...
+  const notes = [261.63, 329.63, 392.00, 329.63,   // C E G E
+    293.66, 369.99, 440.00, 369.99    // D F# A F#
+    ];
+
   let i = 0;
   musicTimer = setInterval(() => {
-    if (muted) return;
-    playTone(notes[i % notes.length], 0.10, "triangle", 0.03);
+    if (muted|| state !== "playing") return;
+    playTone(notes[i % notes.length], 0.25, "triangle", 0.08);
     i++;
-  }, 140);
+  }, 260);
 }
 
 function stopMusic(){
