@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<title>Fantasy Dash</title>
+</head>
+<body style="margin:0">
+<iframe srcdoc='
+<!doctype html>
+<html>
+<head>
+<style>
+body{margin:0;background:#0b1020}
+canvas{display:block;margin:auto;background:#101a3a}
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="400"></canvas>
+<script>
+const c=document.getElementById("c"),x=c.getContext("2d");
+let y=300,v=0,obs=[],score=0,over=false;
+document.onkeydown=e=>{if(e.code=="Space"&&!over)v=-18;if(e.code=="KeyR")location.reload()}
+function loop(){
+ x.clearRect(0,0,800,400);
+ v+=1;y+=v;if(y>300){y=300;v=0}
+ x.fillStyle="#4af";x.fillRect(100,y,40,40);
+ if(Math.random()<0.02)obs.push({x:800});
+ obs.forEach(o=>{o.x-=6;x.fillStyle="#f55";x.fillRect(o.x,300,30,40);
+ if(o.x<140&&o.x>60&&y>260)over=true});
+ x.fillStyle="#fff";x.fillText("Score: "+score,10,20);
+ if(!over){score++;requestAnimationFrame(loop)}
+ else x.fillText("Game Over - Press R",300,200)
+}
+loop();
+</script>
+</body>
+</html>
+'></iframe>
+</body>
+</html>
