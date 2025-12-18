@@ -4,68 +4,150 @@
 <meta charset="utf-8">
 <title>Fantasy Dash</title>
 <style>
-html,body{
-  margin:0;
-  background:#0b1020;
-  overflow:hidden;
-}
-#wrap{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  height:100vh;
-  flex-direction:column;
-}
-canvas{
-  background:#101a3a;
-}
-button{
-  margin-top:10px;
-  padding:10px 16px;
-  font-size:14px;
-  cursor:pointer;
-}
+html,body{margin:0;background:#0b1020;overflow:hidden;font-family:system-ui,Arial}
+#wrap{display:flex;justify-content:center;align-items:center;height:100vh;flex-direction:column;gap:10px}
+canvas{background:#101a3a}
+button{padding:10px 16px;font-size:14px;cursor:pointer}
 </style>
 </head>
 <body>
 
 <div id="wrap">
-  <canvas id="c" width="800" height="400"></canvas>
-  <button onclick="goFull()">Fullscreen</button>
+  <canvas id="c" width="900" height="420"></canvas>
+  <button id="fsBtn">Fullscreen</button>
 </div>
 
 <script>
-function goFull(){
-  const el=document.documentElement;
-  if(el.requestFullscreen) el.requestFullscreen();
-}
+const c = document.getElementById("c");
+const x = c.getContext("2d");
+const fsBtn = document.getElementById("fsBtn");
 
-const c=document.getElementById("c"),x=c.getContext("2d");
-let y=300,v=0,obs=[],score=0,over=false;
-
-document.onkeydown=e=>{
- if(e.code==="Space"&&!over)v=-18;
- if(e.code==="KeyR")location.reload();
+// ---------- Fullscreen ----------
+fsBtn.onclick = () => {
+  const el = document.documentElement;
+  if (el.requestFullscreen) el.requestFullscreen();
 };
 
-function loop(){
- x.clearRect(0,0,800,400);
- v+=1;y+=v;if(y>300){y=300;v=0}
- x.fillStyle="#4af";x.fillRect(100,y,40,40);
- if(Math.random()<0.02)obs.push({x:800});
- obs.forEach(o=>{
-  o.x-=6;
-  x.fillStyle="#f55";
-  x.fillRect(o.x,300,30,40);
-  if(o.x<140&&o.x>60&&y>260)over=true;
- });
- x.fillStyle="#fff";
- x.fillText("Score: "+score,10,20);
- if(!over){score++;requestAnimationFrame(loop)}
- else x.fillText("Game Over - Press R",280,200);
+// ---------- Game State ----------
+let state = "menu"; // "menu" | "playing" | "gameover"
+
+// ---------- Game Variables ----------
+let y, v, obs, score, best;
+best = Number(localStorage.getItem("fd_best") || 0);
+
+function resetRun(){
+  y = 300;          // player Y
+  v = 0;            // velocity
+  obs = [];         // obstacles
+  score = 0;
 }
+
+resetRun();
+
+// ---------- Controls ----------
+function startGame(){
+  if (state === "menu" || state === "gameover") {
+    resetRun();
+    state = "playing";
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    if (state !== "playing") startGame();
+    else v = -18; // jump
+  }
+  if (e.code === "KeyR") {
+    state = "menu";
+  }
+});
+
+c.addEventListener("pointerdown", () => {
+  if (state !== "playing") startGame();
+  else v = -18;
+});
+
+// ---------- Helpers ----------
+function drawCenteredText(text, yPos, size=28, alpha=1){
+  x.save();
+  x.globalAlpha = alpha;
+  x.fillStyle = "#fff";
+  x.font = `${size}px system-ui, Arial`;
+  const w = x.measureText(text).width;
+  x.fillText(text, (c.width - w)/2, yPos);
+  x.restore();
+}
+
+function loop(){
+  // background
+  x.clearRect(0,0,c.width,c.height);
+  x.fillStyle = "#101a3a";
+  x.fillRect(0,0,c.width,c.height);
+
+  // UI (top left)
+  x.fillStyle="#fff";
+  x.font="16px system-ui, Arial";
+  x.fillText("Best: " + best, 10, 20);
+
+  if (state === "menu") {
+    // Start Screen
+    drawCenteredText("Fantasy Dash", 170, 44);
+    drawCenteredText("Press SPACE or click to start", 220, 18, 0.9);
+    drawCenteredText("Press R to return here anytime", 250, 14, 0.8);
+
+    // little preview cube
+    x.fillStyle="#4af";
+    x.fillRect(120, 300, 40, 40);
+
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  // gameplay physics
+  v += 1;
+  y += v;
+  if (y > 300) { y = 300; v = 0; }
+
+  // player
+  x.fillStyle="#4af";
+  x.fillRect(100, y, 40, 40);
+
+  // obstacles spawn + move
+  if (Math.random() < 0.02) obs.push({x:c.width});
+  for (const o of obs) {
+    o.x -= 6;
+    x.fillStyle="#f55";
+    x.fillRect(o.x, 300, 30, 40);
+
+    // collision
+    const hit = (o.x < 140 && o.x > 60 && y > 260);
+    if (hit && state === "playing") state = "gameover";
+  }
+
+  // score
+  if (state === "playing") score++;
+  x.fillStyle="#fff";
+  x.fillText("Score: " + score, 10, 40);
+
+  if (state === "gameover") {
+    // save best
+    if (score > best) {
+      best = score;
+      localStorage.setItem("fd_best", String(best));
+    }
+    // overlay
+    x.fillStyle="rgba(0,0,0,0.35)";
+    x.fillRect(0,0,c.width,c.height);
+    drawCenteredText("Game Over", 200, 40);
+    drawCenteredText("Press SPACE to restart", 245, 18, 0.9);
+    drawCenteredText("Press R for Start Screen", 270, 16, 0.85);
+  }
+
+  requestAnimationFrame(loop);
+}
+
 loop();
 </script>
-
 </body>
 </html>
+
